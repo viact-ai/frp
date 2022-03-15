@@ -346,8 +346,6 @@ type SUDPVisitor struct {
 	readCh  chan *msg.UDPPacket
 	sendCh  chan *msg.UDPPacket
 
-	sendSignal chan struct{}
-
 	cfg *config.SUDPVisitorConf
 }
 
@@ -367,15 +365,11 @@ func (sv *SUDPVisitor) Run() (err error) {
 
 	sv.sendCh = make(chan *msg.UDPPacket, 1024)
 	sv.readCh = make(chan *msg.UDPPacket, 1024)
-	sv.sendSignal = make(chan struct{})
 
 	xl.Info("sudp start to work, listen on %s", addr)
 
 	go sv.dispatcher()
-	go udp.ForwardUserConn(sv.udpConn, sv.readCh, sv.sendCh, int(sv.ctl.clientCfg.UDPPacketSize), func() error {
-		sv.sendSignal <- struct{}{}
-		return nil
-	})
+	go udp.ForwardUserConn(sv.udpConn, sv.readCh, sv.sendCh, int(sv.ctl.clientCfg.UDPPacketSize))
 
 	return
 }
@@ -383,18 +377,22 @@ func (sv *SUDPVisitor) Run() (err error) {
 func (sv *SUDPVisitor) dispatcher() {
 	xl := xlog.FromContextSafe(sv.ctx)
 
+	var (
+		visitorConn net.Conn
+		err         error
+	)
+
 	for {
 		// loop for get frpc to frps tcp conn
 		// setup worker
 		// wait worker to finished
 		// retry or exit
-		var (
-			visitorConn net.Conn
-			err         error
-		)
-		select {
-		case <-sv.sendSignal:
-			visitorConn, err = sv.getNewVisitorConn()
+		if len(sv.sendCh) > 0 || visitorConn == nil {
+			visitorConn, err = sv.getNewVisitorConn() // connect to frps when init frpc, so the connection will be reserve
+		} else {
+			util.RandomSleep(3*time.Second, 0.9, 1.1)
+			xl.Trace("there is no data to be send by sudp, for loop to check send channel")
+			continue
 		}
 
 		if err != nil {
@@ -407,12 +405,13 @@ func (sv *SUDPVisitor) dispatcher() {
 			default:
 			}
 
-			util.RandomSleep(10*time.Second, 0.9, 1.1)
+			util.RandomSleep(3*time.Second, 0.9, 1.1)
 
 			xl.Warn("newVisitorConn to frps error: %v, try to reconnect", err)
 			continue
 		}
 
+		// visitorConn always be closed when worker done.
 		sv.worker(visitorConn)
 
 		select {
