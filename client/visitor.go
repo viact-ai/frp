@@ -387,25 +387,30 @@ func (sv *SUDPVisitor) dispatcher() {
 		// setup worker
 		// wait worker to finished
 		// retry or exit
-		if len(sv.sendCh) > 0 || visitorConn == nil {
+		if len(sv.sendCh) > 0 {
 			visitorConn, err = sv.getNewVisitorConn() // connect to frps when init frpc, so the connection will be reserve
 		} else {
-			util.RandomSleep(3*time.Second, 0.9, 1.1)
 			xl.Trace("there is no data to be send by sudp, for loop to check send channel")
+			util.RandomSleep(time.Second*2, 0.5, 1.5)
 			continue
 		}
 
 		if err != nil {
 			// check if proxy is closed
 			// if checkCloseCh is close, we will return, other case we will continue to reconnect
-			select {
-			case <-sv.checkCloseCh:
-				xl.Info("frpc sudp visitor proxy is closed")
-				return
-			default:
+			for {
+				if len(sv.sendCh) == 0 {
+					xl.Debug("release all sendCh data")
+					break
+				}
+				select {
+				case <-sv.sendCh:
+				case <-sv.checkCloseCh:
+					xl.Info("frpc sudp visitor proxy is closed")
+					return
+				default:
+				}
 			}
-
-			util.RandomSleep(3*time.Second, 0.9, 1.1)
 
 			xl.Warn("newVisitorConn to frps error: %v, try to reconnect", err)
 			continue
