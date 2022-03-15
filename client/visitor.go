@@ -393,7 +393,7 @@ func (sv *SUDPVisitor) dispatcher() {
 			default:
 			}
 
-			time.Sleep(3 * time.Second)
+			util.RandomSleep(10*time.Second, 0.9, 1.1)
 
 			xl.Warn("newVisitorConn to frps error: %v, try to reconnect", err)
 			continue
