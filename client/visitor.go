@@ -346,6 +346,8 @@ type SUDPVisitor struct {
 	readCh  chan *msg.UDPPacket
 	sendCh  chan *msg.UDPPacket
 
+	sendSignal chan struct{}
+
 	cfg *config.SUDPVisitorConf
 }
 
@@ -365,11 +367,15 @@ func (sv *SUDPVisitor) Run() (err error) {
 
 	sv.sendCh = make(chan *msg.UDPPacket, 1024)
 	sv.readCh = make(chan *msg.UDPPacket, 1024)
+	sv.sendSignal = make(chan struct{})
 
 	xl.Info("sudp start to work, listen on %s", addr)
 
 	go sv.dispatcher()
-	go udp.ForwardUserConn(sv.udpConn, sv.readCh, sv.sendCh, int(sv.ctl.clientCfg.UDPPacketSize))
+	go udp.ForwardUserConn(sv.udpConn, sv.readCh, sv.sendCh, int(sv.ctl.clientCfg.UDPPacketSize), func() error {
+		sv.sendSignal <- struct{}{}
+		return nil
+	})
 
 	return
 }
@@ -382,7 +388,15 @@ func (sv *SUDPVisitor) dispatcher() {
 		// setup worker
 		// wait worker to finished
 		// retry or exit
-		visitorConn, err := sv.getNewVisitorConn()
+		var (
+			visitorConn net.Conn
+			err         error
+		)
+		select {
+		case <-sv.sendSignal:
+			visitorConn, err = sv.getNewVisitorConn()
+		}
+
 		if err != nil {
 			// check if proxy is closed
 			// if checkCloseCh is close, we will return, other case we will continue to reconnect

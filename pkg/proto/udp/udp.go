@@ -39,7 +39,7 @@ func GetContent(m *msg.UDPPacket) (buf []byte, err error) {
 	return
 }
 
-func ForwardUserConn(udpConn *net.UDPConn, readCh <-chan *msg.UDPPacket, sendCh chan<- *msg.UDPPacket, bufSize int) {
+func ForwardUserConn(udpConn *net.UDPConn, readCh <-chan *msg.UDPPacket, sendCh chan<- *msg.UDPPacket, bufSize int, callbackFn func() error) {
 	// read
 	go func() {
 		for udpMsg := range readCh {
@@ -64,6 +64,9 @@ func ForwardUserConn(udpConn *net.UDPConn, readCh <-chan *msg.UDPPacket, sendCh 
 
 		select {
 		case sendCh <- udpMsg:
+			if callbackFn != nil {
+				callbackFn()
+			}
 		default:
 		}
 	}

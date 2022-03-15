@@ -213,7 +213,7 @@ func (pxy *UDPProxy) Run() (remoteAddr string, err error) {
 	// Response will be wrapped to be forwarded by work connection to server.
 	// Close readCh and sendCh at the end.
 	go func() {
-		udp.ForwardUserConn(udpConn, pxy.readCh, pxy.sendCh, int(pxy.serverCfg.UDPPacketSize))
+		udp.ForwardUserConn(udpConn, pxy.readCh, pxy.sendCh, int(pxy.serverCfg.UDPPacketSize), nil)
 		pxy.Close()
 	}()
 	return remoteAddr, nil
