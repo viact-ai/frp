@@ -262,3 +262,27 @@ func (m *serverMetrics) GetProxyTraffic(name string) (res *ProxyTrafficInfo) {
 	}
 	return
 }
+
+func (m *serverMetrics) GetProxies() []*ProxyStats {
+	res := make([]*ProxyStats, 0)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for name, proxyStats := range m.info.ProxyStatistics {
+		ps := &ProxyStats{
+			Name:            name,
+			Type:            proxyStats.ProxyType,
+			TodayTrafficIn:  proxyStats.TrafficIn.TodayCount(),
+			TodayTrafficOut: proxyStats.TrafficOut.TodayCount(),
+			CurConns:        int64(proxyStats.CurConns.Count()),
+		}
+		if !proxyStats.LastStartTime.IsZero() {
+			ps.LastStartTime = proxyStats.LastStartTime.Format("01-02 15:04:05")
+		}
+		if !proxyStats.LastCloseTime.IsZero() {
+			ps.LastCloseTime = proxyStats.LastCloseTime.Format("01-02 15:04:05")
+		}
+		res = append(res, ps)
+	}
+	return res
+}

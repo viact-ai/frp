@@ -77,6 +77,7 @@ type ServerStatistics struct {
 type Collector interface {
 	GetServer() *ServerStats
 	GetProxiesByType(proxyType string) []*ProxyStats
+	GetProxies() []*ProxyStats
 	GetProxiesByTypeAndName(proxyType string, proxyName string) *ProxyStats
 	GetProxyTraffic(name string) *ProxyTrafficInfo
 }

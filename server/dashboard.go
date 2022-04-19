@@ -36,6 +36,7 @@ func (svr *Service) RunDashboardServer(address string) (err error) {
 	// url router
 	router := mux.NewRouter()
 	router.HandleFunc("/healthz", svr.Healthz)
+	router.HandleFunc("/api/proxy/port", svr.APIProxyByPort).Methods("GET")
 
 	// debug
 	if svr.cfg.PprofEnable {

@@ -17,6 +17,7 @@ package server
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/fatedier/frp/pkg/config"
 	"github.com/fatedier/frp/pkg/consts"
@@ -191,6 +192,29 @@ func (svr *Service) APIProxyByType(w http.ResponseWriter, r *http.Request) {
 	res.Msg = string(buf)
 }
 
+// api/proxy/port?ports=1011,2022,1033
+func (srv *Service) APIProxyByPort(w http.ResponseWriter, r *http.Request) {
+	res := GeneralResponse{Code: 200}
+	params := mux.Vars(r)
+	portsParam := params["ports"]
+	ports := strings.Split(portsParam, ",")
+
+	defer func() {
+		log.Info("Http response [%s]: code [%d]", r.URL.Path, res.Code)
+		w.WriteHeader(res.Code)
+		if len(res.Msg) > 0 {
+			w.Write([]byte(res.Msg))
+		}
+	}()
+	log.Info("Http request: [%s]", r.URL.Path)
+
+	proxyInfoResp := GetProxyInfoResp{}
+	proxyInfoResp.Proxies = srv.getProxyStatsByPorts(ports)
+
+	buf, _ := json.Marshal(&proxyInfoResp)
+	res.Msg = string(buf)
+}
+
 func (svr *Service) getProxyStatsByType(proxyType string) (proxyInfos []*ProxyStatsInfo) {
 	proxyStats := mem.StatsCollector.GetProxiesByType(proxyType)
 	proxyInfos = make([]*ProxyStatsInfo, 0, len(proxyStats))
@@ -220,6 +244,69 @@ func (svr *Service) getProxyStatsByType(proxyType string) (proxyInfos []*ProxySt
 		proxyInfos = append(proxyInfos, proxyInfo)
 	}
 	return
+}
+
+func (svr *Service) getProxyStatsByPorts(ports []string) (proxyInfos []*ProxyStatsInfo) {
+	proxyStats := mem.StatsCollector.GetProxies()
+	proxyInfos = make([]*ProxyStatsInfo, 0, len(proxyStats))
+
+	// Build map from ports
+	portMap := map[string]uint{}
+	for _, port := range ports {
+		portMap[port] = 1
+	}
+
+	for _, ps := range proxyStats {
+		proxyInfo := &ProxyStatsInfo{}
+		if pxy, ok := svr.pxyManager.GetByName(ps.Name); ok {
+			content, err := json.Marshal(pxy.GetConf())
+			if err != nil {
+				log.Warn("marshal proxy [%s] conf info error: %v", ps.Name, err)
+				continue
+			}
+			proxyInfo.Conf = getConfByType(ps.Type)
+			if err = json.Unmarshal(content, &proxyInfo.Conf); err != nil {
+				log.Warn("unmarshal proxy [%s] conf info error: %v", ps.Name, err)
+				continue
+			}
+			confRemotePort := string(getRemotePort(proxyInfo.Conf, ps.Type))
+			if _, ok := portMap[confRemotePort]; !ok {
+				continue
+			}
+			proxyInfo.Status = consts.Online
+		} else {
+			proxyInfo.Status = consts.Offline
+		}
+		proxyInfo.Name = ps.Name
+		proxyInfo.TodayTrafficIn = ps.TodayTrafficIn
+		proxyInfo.TodayTrafficOut = ps.TodayTrafficOut
+		proxyInfo.CurConns = ps.CurConns
+		proxyInfo.LastStartTime = ps.LastStartTime
+		proxyInfo.LastCloseTime = ps.LastCloseTime
+		proxyInfos = append(proxyInfos, proxyInfo)
+	}
+	return
+}
+
+func getRemotePort(conf interface{}, proxyType string) int {
+	switch proxyType {
+	case consts.TCPProxy:
+		return conf.(TCPOutConf).RemotePort
+	case consts.TCPMuxProxy:
+		return -1
+	case consts.UDPProxy:
+		return conf.(UDPOutConf).RemotePort
+	case consts.HTTPProxy:
+		return -1
+	case consts.HTTPSProxy:
+		return -1
+	case consts.STCPProxy:
+		return -1
+	case consts.XTCPProxy:
+		return -1
+	default:
+		return -1
+	}
 }
 
 // Get proxy info by name.
