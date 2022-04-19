@@ -16,6 +16,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -195,8 +196,7 @@ func (svr *Service) APIProxyByType(w http.ResponseWriter, r *http.Request) {
 // api/proxy/port?ports=1011,2022,1033
 func (srv *Service) APIProxyByPort(w http.ResponseWriter, r *http.Request) {
 	res := GeneralResponse{Code: 200}
-	params := mux.Vars(r)
-	portsParam := params["ports"]
+	portsParam := r.FormValue("ports")
 	ports := strings.Split(portsParam, ",")
 
 	defer func() {
@@ -269,7 +269,7 @@ func (svr *Service) getProxyStatsByPorts(ports []string) (proxyInfos []*ProxySta
 				log.Warn("unmarshal proxy [%s] conf info error: %v", ps.Name, err)
 				continue
 			}
-			confRemotePort := string(getRemotePort(proxyInfo.Conf, ps.Type))
+			confRemotePort := fmt.Sprintf("%v", getRemotePort(proxyInfo.Conf, ps.Type))
 			if _, ok := portMap[confRemotePort]; !ok {
 				continue
 			}
@@ -291,11 +291,11 @@ func (svr *Service) getProxyStatsByPorts(ports []string) (proxyInfos []*ProxySta
 func getRemotePort(conf interface{}, proxyType string) int {
 	switch proxyType {
 	case consts.TCPProxy:
-		return conf.(TCPOutConf).RemotePort
+		return conf.(*TCPOutConf).RemotePort
 	case consts.TCPMuxProxy:
 		return -1
 	case consts.UDPProxy:
-		return conf.(UDPOutConf).RemotePort
+		return conf.(*UDPOutConf).RemotePort
 	case consts.HTTPProxy:
 		return -1
 	case consts.HTTPSProxy:
