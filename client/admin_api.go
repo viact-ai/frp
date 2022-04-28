@@ -38,6 +38,12 @@ func (svr *Service) healthz(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(200)
 }
 
+func (svr *Service) shutdown(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("Shutting down"))
+	w.WriteHeader(200)
+	defer os.Exit(0)
+}
+
 // GET api/reload
 func (svr *Service) apiReload(w http.ResponseWriter, r *http.Request) {
 	res := GeneralResponse{Code: 200}

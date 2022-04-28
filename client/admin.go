@@ -36,6 +36,7 @@ func (svr *Service) RunAdminServer(address string) (err error) {
 	router := mux.NewRouter()
 
 	router.HandleFunc("/healthz", svr.healthz)
+	router.HandleFunc("/api/shutdown", svr.shutdown)
 
 	// debug
 	if svr.cfg.PprofEnable {
